@@ -1,0 +1,134 @@
+---
+title: 'Motor Trend Review: Miles per Galon and transmission, does it matter? '
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+## Introduction
+
+This month we will be reviewing the effect of automatic and manual *transmission (am)* in fuel consumption or *miles per galon (mpg)* in several car models. For more information about this data please visit the [dataset](https://stat.ethz.ch/R-manual/R-devel/library/datasets/html/mtcars.html) web-page. 
+
+Here we show that using hypothesis testing and linear regression using only those two variables, does not give us an accurate description of how transmission affects fuel consumption since we do pretty big assumptions. Using multivariate regression analysis we actually count for other factors that could affect _mpg_:_am_ relationship.
+
+```{r cars, results='hide'}
+data(mtcars)
+library(ggplot2)
+library(gridExtra)
+```
+
+## Data analysis
+
+Taking a first look to the data, we clearly see that the type of transmission installed can affect fuel consumption:
+
+```{r relation, echo=FALSE, fig.height=3}
+g1 <- qplot(mpg, am, data = mtcars, main = "Mileage by transmission", xlab = "Miles per Gallon",
+            ylab = "0 = automatic, 1 = manual")
+g4 <- qplot(factor(am), mpg, data=mtcars, geom=c("boxplot", "jitter"),
+            fill = am, main="Mileage by Transmission",
+            xlab="0 = automatic, 1 = manual", ylab="Miles per Gallon")
+grid.arrange(g4, g1, ncol = 2, nrow = 1)
+```
+
+As we can see it seems to be an effect of the kind of transmission and the fuel consumption. To further address this issue we will be performing a little inferential analysis using t-test (Supplementary Information **2**): 
+```{r means, echo=FALSE}
+#grouping the data and t-test
+manual <- mtcars[mtcars$am == "1",]$mpg
+auto <- mtcars[mtcars$am == "0",]$mpg
+matrix(c(mean(auto), mean(manual))) -> tab
+rownames(tab) <- c("auto", "manual")
+colnames(tab) <- "Transmission Type"
+print(tab)
+```
+Is this difference significant?, lets look at the p-value:
+```{r ttest}
+t.test(manual, auto, alternative = "greater")$p.value
+```
+We see a p value way lower than the type one error of .05, so we could reject the null hypothesis and state that **manual transmission represents a more economic fuel consumption (higher milles per gallon)**. **BUT** this interpretation assumes that all cars are the same, and we know that cars are not only gears. So we have to consider other variables.
+
+## Correlation analysis
+For starters we have to analyze the possible correlations between _mpg_ and the other 10 variables:
+```{r correlation}
+sort(cor(mtcars)[1,])
+```
+So it seems that other variables have also a possible effect on _mpg_. We can also see that if we plot some of these variables together with _mpg_ and _am_ (see supplementary Inofrmation, **3**).
+
+### Linear model
+Our first linear model (fit) analysis will be just using the simplest _linear regression model_ for _mpg_ with only _am_ as a predictor:
+```{r simplest}
+fit <- lm(mpg ~ am, mtcars)
+summary(fit)$coef; summary(fit)$r.squared
+```
+As we can see here the intercept represents the **mpg mean for automatic transmission cars** while am represents the the adjusted estimate increase of manual transmission cars. We also see that the effect is significant with a really low p value, **BUT** R squared is also low, only 0.3597, which means that **this model only explains the 36% of the variance**. If we take a look to the Residuals vs Fitted plot in our first model (Supplementary Information, **4**), there is clear pattern, indicating that other variables should also affect _mpg_ (as we saw in our correlation analysis)
+
+### Multivariate regression model
+Next question is, can we do better? Is there any combination of variables as predictors (including _am_) that will give us a better model?. To address this we will be using the _step()_ function to find the best model (fit3 model):
+```{r stepmodel, echo = TRUE}
+fit3 <- step(lm(mpg ~ ., mtcars), trace = 0)
+summary(fit3)$coef; summary(fit3)$r.squared
+```
+This shows that weight of the vehicle as well as acceleration speed explain most of the variation in _mpg_. So we actually have a model which includes only 1 predictor (_am_) and 2 confounders (_wt_ and _qsec_) that explains up to 85% of the variance. Including all 9 confounders (fit2 model, supplementary information, **5**) gave us a model that explained the 87% of the variance but this actually shows that we also **included unnecessary variables in the analysis**.
+
+Finally we will perform an analysis of variance or ANOVA comparing the linear model (fit) and the best fitted model (fit3):
+```{r anova}
+anova(fit, fit3)
+```
+In summary we can state that we cannot answer the question _Is an automatic or manual transmission better for MPG?_ just by including _mpg_ and _am_ but we have to consider in the context the weight and the acceleartion. So we conclude that in **our model "fit3" where _wt_ and _qsec_ are included as confounders, cars with manual transmission have 2.94 increased in Milles per Gallon (thus more economic) than cars with automatic transmission**.
+
+
+
+
+## Supplementary Information
+
+1. Figure 1 R code
+```{r fig1, echo = TRUE, eval=FALSE}
+g1 <- qplot(mpg, am, data = mtcars, main = "Mileage by transmission", xlab = "Miles per Gallon",
+            ylab = "0 = automatic, 1 = manual")
+g4 <- qplot(mpg, factor(am),data=mtcars, geom=c("boxplot", "jitter"),
+            fill = am, main="Mileage by Transmission",
+            xlab="0 = automatic, 1 = manual", ylab="Miles per Gallon")
+grid.arrange(g4, g1, ncol = 2, nrow = 1)
+```
+2. T-test and data manipulation
+```{r echo = TRUE, eval=FALSE}
+#grouping the data and t-test
+manual <- mtcars[mtcars$am == "1",]$mpg
+auto <- mtcars[mtcars$am == "0",]$mpg
+matrix(c(mean(auto), mean(manual))) -> tab
+rownames(tab) <- c("auto", "manual")
+colnames(tab) <- "Transmission Type"
+print(tab)
+t.test(manual, auto, alternative = "greater")$p.value
+```
+3. Relation between different variables and _mp_ and _am_
+```{r correlationplots, echo = TRUE, fig.height=3, fig.width=10}
+g3bis <- qplot(mpg, am, data = mtcars, size = cyl, ylab = "Miles per Gallon",
+               xlab="0 = automatic, 1 = manual", main = "Cylinders effect on mpg")
+g3bis2 <- qplot(mpg, am, data = mtcars, size = carb, main = "Carburetors effect on mpg",
+                ylab = "Miles per Gallon", xlab="0 = automatic, 1 = manual")
+g3bis3 <- qplot(mpg, am, data = mtcars, size = wt, main = "Weight effect on mpg",
+                ylab = "Miles per Gallon", xlab="0 = automatic, 1 = manual")
+grid.arrange(g3bis, g3bis2, g3bis3, ncol = 3, nrow = 1)
+```
+Different trends in the data depending on the variables we choose to include in our anaiysis, supporting the idea that we can not assume a t-test including just _mpg_ and _am_ as the only factors.
+
+4. Residuals vs Fitted in our three different models
+```{r step, echo = TRUE, fig.height=3, fig.width=10}
+fit2 <- lm (mpg ~ ., mtcars)
+par(mfrow = c(1, 3))
+plot(fit, which = 1)
+title(main = "Linear regression fit model", cex = 1.5)
+plot(fit2, which = 1)
+title(main = "Multivariate analysis fit2 model", cex = 1.5)
+plot(fit3, which = 1)
+title(main = "Multivariate analysis fit3 model", cex = 1.5)
+```
+
+5. Multivariate regression model including all possible variables
+When we include all variables as confounder in our _multivariate regression analysis_ things changed (fit2 model), since now our _mpg_ mean for automatic transmission cars in decreased to 12.30 and the adjust in the mean in manual transmission cars was only 2.52 compared with the 7.244 we got in the linear regression model. Also the plot of residuals vs fitted values shows no problem in the current model (supplementary information, **4**). R squared also showed that up to 87% of the variance is explained when all variables were included.
+```{r multi}
+summary(fit2)
+```
+
